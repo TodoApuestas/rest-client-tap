@@ -112,7 +112,7 @@ class RestClientTapAdmin {
 		) );
 		
 		$wp_customize->add_setting( 'tap_base_url', array(
-			'default'           => 'http://todoapuestas.com',
+			'default'           => 'https://todoapuestas.com',
 			'capability'        => 'edit_theme_options',
 			'sanitize_callback' => 'sanitize_text_field',
 		) );

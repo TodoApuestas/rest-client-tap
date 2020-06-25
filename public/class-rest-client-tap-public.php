@@ -171,7 +171,7 @@ class RestClientTapPublic {
 	 */
 	public function get_result_from_api($url, $assoc = true, $intention = 'Request result')
 	{
-		$apiResponse = wp_remote_get($url);
+		$apiResponse = wp_remote_get($url, array('timeout' => 30));
 		$apiResponseCode = wp_remote_retrieve_response_code($apiResponse);
 		$apiResponseBody = wp_remote_retrieve_body($apiResponse);
 		
@@ -185,7 +185,7 @@ class RestClientTapPublic {
 		if(null !== $error){
 			$error = sprintf( __( '[%s] Invalid response. %s', $this->plugin_name ), $intention, $error );
 			$_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
-			log_error($error);
+//			log_error($error);
 			return null;
 		}
 		
@@ -250,8 +250,24 @@ class RestClientTapPublic {
 		return $result_from_api;
 	}
 	
-	public function check_ip($ip)
+	public function check_ip($session_name, $ip = null)
 	{
+        $session_id = session_id();
+        if(empty($session_id) && !headers_sent()) @session_start();
+        if(is_null($ip)) {
+            $ip = $_SERVER['REMOTE_ADDR'];
+            if (array_key_exists('HTTP_X_REAL_IP', $_SERVER)) {
+                $ip = $_SERVER['HTTP_X_REAL_IP'];
+            }
+        }
+        if(isset($_SESSION[$session_name])){
+            if(strcmp($ip, $_SESSION[$session_name]['client_ip']) === 0){
+                $country = $_SESSION[$session_name]['client_country'];
+                return $country;
+            }
+            unset($_SESSION[$session_name]);
+        }
+
 		$url_check_ip = '%s/api/geoip/country-by-ip.json/%s/?access_token=%s&_=%s';
 		$baseUrl = get_theme_mod( 'tap_base_url' );
 		$oauthAccessToken = $this->get_oauth_access_token();
@@ -259,7 +275,14 @@ class RestClientTapPublic {
 		
 		$apiUrl = esc_url(sprintf($url_check_ip, $baseUrl, $ip, $oauthAccessToken, $now->getTimestamp()));
 		$result = $this->get_result_from_api($apiUrl, true, 'Request Country by IP');
-		// TODO: revisar funcionamiento.
-		return $result;
+
+        if ( ! isset( $_SESSION[$session_name] ) ) {
+            $_SESSION[$session_name] = array(
+                'client_ip'      => $ip,
+                'client_country' => $result
+            );
+        }
+
+        return $result;
 	}
 }

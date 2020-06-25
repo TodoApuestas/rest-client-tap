@@ -177,7 +177,8 @@ class RestClientTap {
 		
 		$this->loader->add_filter( 'rest_client_tap_oauth_access_token', $plugin_public, 'get_oauth_access_token' );
 		$this->loader->add_filter( 'rest_client_tap_get_result_from_api', $plugin_public, 'get_result_from_api', 10, 3 );
-		
+
+		$this->loader->add_filter('rest_client_tap_check_ip', $plugin_public, 'check_ip', 10, 2);
 		$this->loader->add_filter( 'rest_client_tap_request_block_bookies', $plugin_public, 'request_block_bookies' );
 	}
 
