@@ -65,11 +65,12 @@ class RestClientTap {
 	 * the public-facing side of the site.
 	 *
 	 * @since    1.0.0
+     * @updated  1.1.2
 	 */
 	public function __construct() {
 
 		$this->plugin_name = 'rest-client-tap';
-		$this->version = '1.0.1';
+		$this->version = '1.1.2';
 
 		$this->load_dependencies();
 		$this->set_locale();

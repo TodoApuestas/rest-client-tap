@@ -9,13 +9,14 @@
  * Plugin Name:       Rest Client TAP
  * Plugin URI:        https://www.wordpress.org/plugins/rest-client-tap
  * Description:       Rest client plugin to TodoApuestas API services
- * Version:           1.1
+ * Version:           1.1.2
  * Author:            Alain Sanchez <luka.ghost@gmail.com>
  * Author URI:        http://www.linkedin.com/in/mrbrazzi/
  * License:           GPL-2.0+
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       rest-client-tap
  * Domain Path:       /languages
+ * GitHub Plugin URI: https://github.com/mrbrazzi/rest-client-tap
  */
 
 // If this file is called directly, abort.
