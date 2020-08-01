@@ -137,14 +137,14 @@ class RestClientTapPublic {
 	 *
 	 * @return null|string
 	 */
-	public function get_oauth_access_token()
+	public function request_oauth_access_token()
 	{
 		$session_id = session_id();
 		if(empty($session_id) && !headers_sent()){
 			@session_start();
 		}
 		
-		if(isset($_SESSION['TAP_OAUTH_CLIENT'])){
+		if(in_array('TAP_OAUTH_CLIENT', $_SESSION) && isset($_SESSION['TAP_OAUTH_CLIENT'])){
 			$now = new \DateTime('now');
 			if($now->getTimestamp() <= (integer)$_SESSION['TAP_OAUTH_CLIENT']['expires_in']){
 				$oauthAccessToken = $_SESSION['TAP_OAUTH_CLIENT']['access_token'];
@@ -164,6 +164,9 @@ class RestClientTapPublic {
 		$baseUrl = get_theme_mod( 'tap_base_url' );
 		$oauthUrl = sprintf($this->client_credentials_url, $baseUrl, $publicId, $secretKey);
 		$oauthResponseBody = $this->get_result_from_api($oauthUrl, false, 'Access Token');
+		if (is_null($oauthResponseBody)){
+		    return null;
+        }
 		if(!is_object($oauthResponseBody)){
 			$error = sprintf(__('[%s] Invalid OAuth response body', $this->plugin_name), 'OAuth Response');
 			$_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
@@ -193,7 +196,7 @@ class RestClientTapPublic {
 	 */
 	public function get_result_from_api($url, $assoc = true, $intention = 'Request result')
 	{
-		$apiResponse = wp_remote_get($url, array('timeout' => 30));
+		$apiResponse = wp_remote_get($url, array('timeout' => 35));
 		$apiResponseCode = wp_remote_retrieve_response_code($apiResponse);
 		$apiResponseBody = wp_remote_retrieve_body($apiResponse);
 		
@@ -204,7 +207,7 @@ class RestClientTapPublic {
 			$error = $apiResponseBody['error_description'];
 		}
 		
-		if(null !== $error){
+		if(!is_null($error)){
 			$error = sprintf( __( '[%s] Invalid response. %s', $this->plugin_name ), $intention, $error );
 			$_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
 			return null;
@@ -212,6 +215,27 @@ class RestClientTapPublic {
 		
 		return json_decode($apiResponseBody, $assoc);
 	}
+
+    /**
+     * @since 1.1.3
+     *
+     * @return null|object
+     */
+	private function get_oauth_access_token() {
+	    $max_retries = 3;
+        $oauthAccessToken = null;
+        while ($oauthAccessToken == null && $max_retries > 0) {
+            $oauthAccessToken = $this->request_oauth_access_token();
+            $max_retries--;
+        }
+
+        if(empty($oauthAccessToken) && $max_retries === 0) {
+            $error = sprintf( __( '[%s] Max retries reached requesting oauth access token.', $this->plugin_name ));
+            $_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
+        }
+
+        return $oauthAccessToken;
+    }
 
     /**
      * @updated 1.1.2
@@ -222,12 +246,18 @@ class RestClientTapPublic {
 		$baseUrl = get_theme_mod( 'tap_base_url' );
 		$tracked_web_category = get_theme_mod('tap_tracker_web_category');
 		$traker = get_theme_mod('tap_tracker_domain');
-		$oauthAccessToken = $this->get_oauth_access_token();
-		$now = new \DateTime('now');
+
+        $oauthAccessToken = $this->get_oauth_access_token();
+
+        if(empty($oauthAccessToken)) {
+            return;
+        }
+
+        $now = new \DateTime('now');
 		
 		$apiUrl = esc_url(sprintf($url_sync_link_bookies, $baseUrl, $tracked_web_category, $traker, $oauthAccessToken, $now->getTimestamp()));
 		$result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Bookies');
-		if(null !== $result_from_api && count($result_from_api)){
+		if(!is_null($result_from_api) && is_array($result_from_api) && !empty($result_from_api)){
 			update_option('TAP_BOOKIES', $result_from_api);
             $this->unset_errors();
 		}
@@ -240,12 +270,18 @@ class RestClientTapPublic {
 	{
 		$url_sync_link_deportes = '%s/api/deporte/listado-visible-blogs.json/?access_token=%s&_=%s';
 		$baseUrl = get_theme_mod( 'tap_base_url' );
-		$oauthAccessToken = $this->get_oauth_access_token();
+
+        $oauthAccessToken = $this->get_oauth_access_token();
+
+        if(empty($oauthAccessToken)) {
+            return;
+        }
+
 		$now = new \DateTime('now');
 		
 		$apiUrl = esc_url(sprintf($url_sync_link_deportes, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
 		$result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Sports');
-		if(isset($result_from_api['deporte']) && count($result_from_api['deporte'])){
+		if(!is_null($result_from_api) && is_array($result_from_api) && in_array('deporte', $result_from_api) && !empty($result_from_api['deporte'])){
 			update_option('TAP_DEPORTES', $result_from_api['deporte']);
             $this->unset_errors();
 		}
@@ -258,7 +294,13 @@ class RestClientTapPublic {
 	{
 		$url_sync_link_competiciones = '%s/api/competicion/listado.json/?access_token=%s&_=%s';
 		$baseUrl = get_theme_mod( 'tap_base_url' );
-		$oauthAccessToken = $this->get_oauth_access_token();
+
+        $oauthAccessToken = $this->get_oauth_access_token();
+
+        if(empty($oauthAccessToken)) {
+            return;
+        }
+
 		$now = new \DateTime('now');
 		
 		$apiUrl = esc_url(sprintf($url_sync_link_competiciones, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
@@ -283,7 +325,7 @@ class RestClientTapPublic {
 
         $clientIp = $this->get_client_ip();
 
-        if(array_key_exists($session_name, $_SESSION)){
+        if(isset($_SESSION) && array_key_exists($session_name, $_SESSION)){
             if(strcmp($clientIp, $_SESSION[$session_name]['client_ip']) === 0){
                 return $_SESSION[$session_name]['blocks_bookies'];
             }
@@ -294,13 +336,18 @@ class RestClientTapPublic {
 		$baseUrl = get_theme_mod( 'tap_base_url' );
         $tracked_web_category = get_theme_mod('tap_tracker_web_category');
 
-		$oauthAccessToken = $this->get_oauth_access_token();
+        $oauthAccessToken = $this->get_oauth_access_token();
+
+        if(empty($oauthAccessToken)) {
+            return get_option('TAP_BLOCKS_BOOKIES', []);
+        }
+
 		$now = new \DateTime('now');
 		
 		$apiUrl = esc_url(sprintf($url_block_bookies, $baseUrl, $tracked_web_category, $track_site, 'json', $clientIp, $oauthAccessToken, $now->getTimestamp()));
 		$result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Block Bookies');
 
-        if(null !== $result_from_api && count($result_from_api)){
+        if(!empty($result_from_api)){
             update_option('TAP_BLOCKS_BOOKIES', $result_from_api);
             $this->unset_errors();
         }
@@ -337,7 +384,12 @@ class RestClientTapPublic {
 
 		$url_check_ip = '%s/api/geoip/country-by-ip.json/%s/?access_token=%s&_=%s';
 		$baseUrl = get_theme_mod( 'tap_base_url' );
+
 		$oauthAccessToken = $this->get_oauth_access_token();
+        if(empty($oauthAccessToken)) {
+            return null;
+        }
+
 		$now = new \DateTime('now');
 		
 		$apiUrl = esc_url(sprintf($url_check_ip, $baseUrl, $ip, $oauthAccessToken, $now->getTimestamp()));
