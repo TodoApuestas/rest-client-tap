@@ -133,7 +133,7 @@ class RestClientTapPublic {
 	
 	/**
 	 * @since 1.0.0
-     * @updated 1.1.2
+     * @updated 1.1.4
 	 *
 	 * @return null|string
 	 */
@@ -144,7 +144,7 @@ class RestClientTapPublic {
 			@session_start();
 		}
 		
-		if(in_array('TAP_OAUTH_CLIENT', $_SESSION) && isset($_SESSION['TAP_OAUTH_CLIENT'])){
+		if(isset($_SESSION) && in_array('TAP_OAUTH_CLIENT', $_SESSION) && isset($_SESSION['TAP_OAUTH_CLIENT'])){
 			$now = new \DateTime('now');
 			if($now->getTimestamp() <= (integer)$_SESSION['TAP_OAUTH_CLIENT']['expires_in']){
 				$oauthAccessToken = $_SESSION['TAP_OAUTH_CLIENT']['access_token'];
