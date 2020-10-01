@@ -134,54 +134,40 @@ class RestClientTapPublic {
 	/**
 	 * @since 1.0.0
      * @updated 1.1.4
-	 *
+     * @updated 1.1.5
+     *
 	 * @return null|string
 	 */
 	public function request_oauth_access_token()
 	{
-		$session_id = session_id();
-		if(empty($session_id) && !headers_sent()){
-			@session_start();
-		}
+        $trasient_name = 'tap_oauth_client_access_token';
 		
-		if(isset($_SESSION) && in_array('TAP_OAUTH_CLIENT', $_SESSION) && isset($_SESSION['TAP_OAUTH_CLIENT'])){
-			$now = new \DateTime('now');
-			if($now->getTimestamp() <= (integer)$_SESSION['TAP_OAUTH_CLIENT']['expires_in']){
-				$oauthAccessToken = $_SESSION['TAP_OAUTH_CLIENT']['access_token'];
-				return $oauthAccessToken;
-			}
-			unset($_SESSION['TAP_OAUTH_CLIENT']);
-		}
-		
-		$publicId = get_theme_mod( 'tap_public_id' );
-		$secretKey = get_theme_mod( 'tap_secret_key' );
-		if(empty($publicId) || empty($secretKey)){
-			$error = sprintf(__('[%s] No TAP PUBLIC ID or TAP SECRET KEY given. You must set TAP API access in <a href="%s">API REST</a> section', $this->plugin_name), 'OAuth Credentials', esc_url(wp_customize_url()));
-			$_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
-			return null;
-		}
-		
-		$baseUrl = get_theme_mod( 'tap_base_url' );
-		$oauthUrl = sprintf($this->client_credentials_url, $baseUrl, $publicId, $secretKey);
-		$oauthResponseBody = $this->get_result_from_api($oauthUrl, false, 'Access Token');
-		if (is_null($oauthResponseBody)){
-		    return null;
+		if(($oauthAccessToken = get_transient($trasient_name)) === false ) {
+            $publicId = get_theme_mod('tap_public_id');
+            $secretKey = get_theme_mod('tap_secret_key');
+            if (empty($publicId) || empty($secretKey)) {
+                $error = sprintf(__('[%s] No TAP PUBLIC ID or TAP SECRET KEY given. You must set TAP API access in <a href="%s">API REST</a> section',
+                    $this->plugin_name), 'OAuth Credentials', esc_url(wp_customize_url()));
+                $_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
+                return null;
+            }
+
+            $baseUrl = get_theme_mod('tap_base_url');
+            $oauthUrl = sprintf($this->client_credentials_url, $baseUrl, $publicId, $secretKey);
+            $oauthResponseBody = $this->get_result_from_api($oauthUrl, false, 'Access Token');
+            if (is_null($oauthResponseBody)) {
+                return null;
+            }
+            if (!is_object($oauthResponseBody)) {
+                $error = sprintf(__('[%s] Invalid OAuth response body', $this->plugin_name), 'OAuth Response');
+                $_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
+                return null;
+            }
+            $oauthAccessToken = $oauthResponseBody->access_token;
+
+            set_transient($trasient_name, $oauthAccessToken, (integer)$oauthResponseBody->expires_in);
         }
-		if(!is_object($oauthResponseBody)){
-			$error = sprintf(__('[%s] Invalid OAuth response body', $this->plugin_name), 'OAuth Response');
-			$_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
-			return null;
-		}
-		$oauthAccessToken = $oauthResponseBody->access_token;
-		
-		if(!isset($_SESSION['TAP_OAUTH_CLIENT'])){
-			$now = new \DateTime('now');
-			$_SESSION['TAP_OAUTH_CLIENT'] = array(
-				'access_token' => $oauthAccessToken,
-				'expires_in' => $now->getTimestamp() + (integer)$oauthResponseBody->expires_in
-			);
-		}
-		
+
 		return $oauthAccessToken;
 	}
 	
@@ -219,7 +205,7 @@ class RestClientTapPublic {
     /**
      * @since 1.1.3
      *
-     * @return null|object
+     * @return null|string
      */
 	private function get_oauth_access_token() {
 	    $max_retries = 3;
@@ -239,129 +225,138 @@ class RestClientTapPublic {
 
     /**
      * @updated 1.1.2
+     * @updated 1.1.5
      */
 	public function request_bookies()
 	{
-		$url_sync_link_bookies = '%s/api/blocks-bookies/%s/%s/listado-bonos-bookies.json/?access_token=%s&_=%s';
-		$baseUrl = get_theme_mod( 'tap_base_url' );
-		$tracked_web_category = get_theme_mod('tap_tracker_web_category');
-		$traker = get_theme_mod('tap_tracker_domain');
+        $trasient_name = 'tap_bookies';
 
-        $oauthAccessToken = $this->get_oauth_access_token();
+        if(($result_from_api = get_transient($trasient_name)) === false) {
 
-        if(empty($oauthAccessToken)) {
-            return;
+            $url_sync_link_bookies = '%s/api/blocks-bookies/%s/%s/listado-bonos-bookies.json/?access_token=%s&_=%s';
+            $baseUrl = get_theme_mod('tap_base_url');
+            $tracked_web_category = get_theme_mod('tap_tracker_web_category');
+            $traker = get_theme_mod('tap_tracker_domain');
+
+            $oauthAccessToken = $this->get_oauth_access_token();
+
+            if (empty($oauthAccessToken)) {
+                return;
+            }
+
+            $now = new \DateTime('now');
+
+            $apiUrl = esc_url(sprintf($url_sync_link_bookies, $baseUrl, $tracked_web_category, $traker,
+                $oauthAccessToken, $now->getTimestamp()));
+            $result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Bookies');
+            if (!is_null($result_from_api) && is_array($result_from_api) && !empty($result_from_api)) {
+                update_option('TAP_BOOKIES', $result_from_api);
+                set_transient($trasient_name, $now->format('Y-m-d H:i:s'), 4 * 3600);
+                $this->unset_errors();
+            }
         }
-
-        $now = new \DateTime('now');
-		
-		$apiUrl = esc_url(sprintf($url_sync_link_bookies, $baseUrl, $tracked_web_category, $traker, $oauthAccessToken, $now->getTimestamp()));
-		$result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Bookies');
-		if(!is_null($result_from_api) && is_array($result_from_api) && !empty($result_from_api)){
-			update_option('TAP_BOOKIES', $result_from_api);
-            $this->unset_errors();
-		}
 	}
 
     /**
      * @updated 1.1.2
+     * @updated 1.1.5
      */
 	public function request_sports()
 	{
-		$url_sync_link_deportes = '%s/api/deporte/listado-visible-blogs.json/?access_token=%s&_=%s';
-		$baseUrl = get_theme_mod( 'tap_base_url' );
+        $trasient_name = 'tap_deportes';
 
-        $oauthAccessToken = $this->get_oauth_access_token();
+        if(($result_from_api = get_transient($trasient_name)) === false) {
 
-        if(empty($oauthAccessToken)) {
-            return;
+            $url_sync_link_deportes = '%s/api/deporte/listado-visible-blogs.json/?access_token=%s&_=%s';
+            $baseUrl = get_theme_mod('tap_base_url');
+
+            $oauthAccessToken = $this->get_oauth_access_token();
+
+            if (empty($oauthAccessToken)) {
+                return;
+            }
+
+            $now = new \DateTime('now');
+
+            $apiUrl = esc_url(sprintf($url_sync_link_deportes, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
+            $result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Sports');
+            if (!is_null($result_from_api) && is_array($result_from_api) && in_array('deporte',
+                    $result_from_api) && !empty($result_from_api['deporte'])) {
+                update_option('TAP_DEPORTES', $result_from_api['deporte']);
+                set_transient($trasient_name, $now->format('Y-m-d H:i:s'), 4 * 3600);
+                $this->unset_errors();
+            }
         }
-
-		$now = new \DateTime('now');
-		
-		$apiUrl = esc_url(sprintf($url_sync_link_deportes, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
-		$result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Sports');
-		if(!is_null($result_from_api) && is_array($result_from_api) && in_array('deporte', $result_from_api) && !empty($result_from_api['deporte'])){
-			update_option('TAP_DEPORTES', $result_from_api['deporte']);
-            $this->unset_errors();
-		}
 	}
 
     /**
      * @updated 1.1.2
+     * @updated 1.1.5
      */
 	public function request_competitions()
 	{
-		$url_sync_link_competiciones = '%s/api/competicion/listado.json/?access_token=%s&_=%s';
-		$baseUrl = get_theme_mod( 'tap_base_url' );
+        $trasient_name = 'tap_competiciones';
 
-        $oauthAccessToken = $this->get_oauth_access_token();
+        if(($result_from_api = get_transient($trasient_name)) === false) {
 
-        if(empty($oauthAccessToken)) {
-            return;
+            $url_sync_link_competiciones = '%s/api/competicion/listado.json/?access_token=%s&_=%s';
+            $baseUrl = get_theme_mod('tap_base_url');
+
+            $oauthAccessToken = $this->get_oauth_access_token();
+
+            if (empty($oauthAccessToken)) {
+                return;
+            }
+
+            $now = new \DateTime('now');
+
+            $apiUrl = esc_url(sprintf($url_sync_link_competiciones, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
+            $result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Competitions');
+            if (isset($result_from_api['competicion']) && count($result_from_api['competicion'])) {
+                update_option('TAP_COMPETICIONES', $result_from_api['competicion']);
+                set_transient($trasient_name, $now->format('Y-m-d H:i:s'), 4 * 3600);
+                $this->unset_errors();
+            }
         }
-
-		$now = new \DateTime('now');
-		
-		$apiUrl = esc_url(sprintf($url_sync_link_competiciones, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
-		$result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Competitions');
-		if(isset($result_from_api['competicion']) && count($result_from_api['competicion'])){
-			update_option('TAP_COMPETICIONES', $result_from_api['competicion']);
-            $this->unset_errors();
-		}
 	}
 
     /**
      * @updated 1.1.2
+     * @updated 1.1.5
      *
      * @param $track_site
      * @return array|mixed|object|null
      */
-	public function request_block_bookies($track_site)
+	public function request_block_bookies($track_site, $tracked_web_category)
 	{
-        $session_name = 'tap_blocks_bookies';
-	    $session_id = session_id();
-        if(empty($session_id) && !headers_sent()) @session_start();
-
         $clientIp = $this->get_client_ip();
+	    $trasient_name = 'tap_blocks_bookies_' . $clientIp;
 
-        if(isset($_SESSION) && array_key_exists($session_name, $_SESSION)){
-            if(strcmp($clientIp, $_SESSION[$session_name]['client_ip']) === 0){
-                return $_SESSION[$session_name]['blocks_bookies'];
+        if(($result_from_api = get_transient($trasient_name)) === false) {
+            $url_block_bookies = '%s/api/blocks-bookies/%s/%s/listado.%s/%s/?access_token=%s&_=%s';
+            $baseUrl = get_theme_mod('tap_base_url');
+
+            $oauthAccessToken = $this->get_oauth_access_token();
+
+            if (empty($oauthAccessToken)) {
+                return [];
             }
-            unset($_SESSION[$session_name]);
+
+            $now = new \DateTime('now');
+
+            $apiUrl = esc_url(sprintf($url_block_bookies, $baseUrl, $tracked_web_category, $track_site, 'json',
+                $clientIp, $oauthAccessToken, $now->getTimestamp()));
+            $result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Block Bookies');
+
+            set_transient($trasient_name, $result_from_api, 24 * 3600);
         }
-
-		$url_block_bookies = '%s/api/blocks-bookies/%s/%s/listado.%s/%s/?access_token=%s&_=%s';
-		$baseUrl = get_theme_mod( 'tap_base_url' );
-        $tracked_web_category = get_theme_mod('tap_tracker_web_category');
-
-        $oauthAccessToken = $this->get_oauth_access_token();
-
-        if(empty($oauthAccessToken)) {
-            return get_option('TAP_BLOCKS_BOOKIES', []);
-        }
-
-		$now = new \DateTime('now');
-		
-		$apiUrl = esc_url(sprintf($url_block_bookies, $baseUrl, $tracked_web_category, $track_site, 'json', $clientIp, $oauthAccessToken, $now->getTimestamp()));
-		$result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Block Bookies');
-
-        if(!empty($result_from_api)){
-            update_option('TAP_BLOCKS_BOOKIES', $result_from_api);
-            $this->unset_errors();
-        }
-
-        $_SESSION[$session_name] = array(
-            'client_ip'      => $clientIp,
-            'blocks_bookies' => $result_from_api
-        );
 
 		return $result_from_api;
 	}
 
     /**
      * @updated 1.1.2
+     * @updated 1.1.5
      *
      * @param $session_name
      * @param null $ip
@@ -369,36 +364,37 @@ class RestClientTapPublic {
      */
 	public function check_ip($session_name, $ip = null)
 	{
-        $session_id = session_id();
-        if(empty($session_id) && !headers_sent()) @session_start();
         if(is_null($ip)) {
             $ip = $this->get_client_ip();
         }
-        if(isset($_SESSION) && array_key_exists($session_name, $_SESSION)){
-            if(strcmp($ip, $_SESSION[$session_name]['client_ip']) === 0){
-                $country = $_SESSION[$session_name]['client_country'];
-                return $country;
+
+        $trasient_name = 'tap_check_ip_' . $ip;
+
+        if(($result = get_transient($trasient_name)) === false) {
+
+            if (isset($_SESSION) && array_key_exists($session_name, $_SESSION)) {
+                if (strcmp($ip, $_SESSION[$session_name]['client_ip']) === 0) {
+                    $country = $_SESSION[$session_name]['client_country'];
+                    return $country;
+                }
+                unset($_SESSION[$session_name]);
             }
-            unset($_SESSION[$session_name]);
+
+            $url_check_ip = '%s/api/geoip/country-by-ip.json/%s/?access_token=%s&_=%s';
+            $baseUrl = get_theme_mod('tap_base_url');
+
+            $oauthAccessToken = $this->get_oauth_access_token();
+            if (empty($oauthAccessToken)) {
+                return null;
+            }
+
+            $now = new \DateTime('now');
+
+            $apiUrl = esc_url(sprintf($url_check_ip, $baseUrl, $ip, $oauthAccessToken, $now->getTimestamp()));
+            $result = $this->get_result_from_api($apiUrl, true, 'Request Country by IP');
+
+            set_transient($trasient_name, $result, 24 * 3600);
         }
-
-		$url_check_ip = '%s/api/geoip/country-by-ip.json/%s/?access_token=%s&_=%s';
-		$baseUrl = get_theme_mod( 'tap_base_url' );
-
-		$oauthAccessToken = $this->get_oauth_access_token();
-        if(empty($oauthAccessToken)) {
-            return null;
-        }
-
-		$now = new \DateTime('now');
-		
-		$apiUrl = esc_url(sprintf($url_check_ip, $baseUrl, $ip, $oauthAccessToken, $now->getTimestamp()));
-		$result = $this->get_result_from_api($apiUrl, true, 'Request Country by IP');
-
-        $_SESSION[$session_name] = array(
-            'client_ip'      => $ip,
-            'client_country' => $result
-        );
 
         return $result;
 	}
