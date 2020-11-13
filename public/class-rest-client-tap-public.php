@@ -330,7 +330,7 @@ class RestClientTapPublic {
 	public function request_block_bookies($track_site, $tracked_web_category)
 	{
         $clientIp = $this->get_client_ip();
-	    $trasient_name = 'tap_blocks_bookies_' . $clientIp;
+        $trasient_name = 'tap_blocks_bookies_' . implode('_', explode('.', $clientIp, -1 ));
 
         if(($result_from_api = get_transient($trasient_name)) === false) {
             $url_block_bookies = '%s/api/blocks-bookies/%s/%s/listado.%s/%s/?access_token=%s&_=%s';

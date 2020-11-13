@@ -4,7 +4,7 @@ Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=brazz
 Tags: api rest, tipster, pick
 Requires at least: 3.5
 Tested up to: 5.5
-Stable tag: 1.1.5
+Stable tag: 1.1.6
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,6 +51,9 @@ Nothing for now
 
 
 == Changelog ==
+
+= 1.1.6 =
+* Added some minor improvements
 
 = 1.1.5 =
 * Added several improvements. Use transient instead SESSION to keep some information temporally.
