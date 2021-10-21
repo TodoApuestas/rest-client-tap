@@ -141,14 +141,15 @@ class RestClientTapPublic {
 	public function request_oauth_access_token()
 	{
         $trasient_name = 'tap_oauth_client_access_token';
-		
-		if(($oauthAccessToken = get_transient($trasient_name)) === false ) {
+        $oauthAccessToken = get_transient($trasient_name);
+		if($oauthAccessToken === false ) {
             $publicId = get_theme_mod('tap_public_id');
             $secretKey = get_theme_mod('tap_secret_key');
             if (empty($publicId) || empty($secretKey)) {
                 $error = sprintf(__('[%s] No TAP PUBLIC ID or TAP SECRET KEY given. You must set TAP API access in <a href="%s">API REST</a> section',
                     $this->plugin_name), 'OAuth Credentials', esc_url(wp_customize_url()));
                 $_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
+                delete_transient($trasient_name);
                 return null;
             }
 
@@ -156,11 +157,13 @@ class RestClientTapPublic {
             $oauthUrl = sprintf($this->client_credentials_url, $baseUrl, $publicId, $secretKey);
             $oauthResponseBody = $this->get_result_from_api($oauthUrl, false, 'Access Token');
             if (is_null($oauthResponseBody)) {
+                delete_transient($trasient_name);
                 return null;
             }
             if (!is_object($oauthResponseBody)) {
                 $error = sprintf(__('[%s] Invalid OAuth response body', $this->plugin_name), 'OAuth Response');
                 $_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
+                delete_transient($trasient_name);
                 return null;
             }
             $oauthAccessToken = $oauthResponseBody->access_token;
@@ -198,7 +201,7 @@ class RestClientTapPublic {
 			$_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
 			return null;
 		}
-		
+
 		return json_decode($apiResponseBody, $assoc);
 	}
 
@@ -210,13 +213,13 @@ class RestClientTapPublic {
 	private function get_oauth_access_token() {
 	    $max_retries = 3;
         $oauthAccessToken = null;
-        while ($oauthAccessToken == null && $max_retries > 0) {
+        while ($oauthAccessToken === null && $max_retries > 0) {
             $oauthAccessToken = $this->request_oauth_access_token();
             $max_retries--;
         }
 
         if(empty($oauthAccessToken) && $max_retries === 0) {
-            $error = sprintf( __( '[%s] Max retries reached requesting oauth access token.', $this->plugin_name ));
+            $error = __( '[%s] Max retries reached requesting oauth access token.', $this->plugin_name );
             $_SESSION['REST_CLIENT_TAP_ERRORS'][] = $error;
         }
 
@@ -230,9 +233,8 @@ class RestClientTapPublic {
 	public function request_bookies()
 	{
         $trasient_name = 'tap_bookies';
-
-        if(($result_from_api = get_transient($trasient_name)) === false) {
-
+        $result_from_api = get_transient($trasient_name);
+        if($result_from_api === false) {
             $url_sync_link_bookies = '%s/api/blocks-bookies/%s/%s/listado-bonos-bookies.json/?access_token=%s&_=%s';
             $baseUrl = get_theme_mod('tap_base_url');
             $tracked_web_category = get_theme_mod('tap_tracker_web_category');
@@ -241,6 +243,7 @@ class RestClientTapPublic {
             $oauthAccessToken = $this->get_oauth_access_token();
 
             if (empty($oauthAccessToken)) {
+                delete_transient($trasient_name);
                 return;
             }
 
@@ -249,9 +252,9 @@ class RestClientTapPublic {
             $apiUrl = esc_url(sprintf($url_sync_link_bookies, $baseUrl, $tracked_web_category, $traker,
                 $oauthAccessToken, $now->getTimestamp()));
             $result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Bookies');
-            if (!is_null($result_from_api) && is_array($result_from_api) && !empty($result_from_api)) {
+            if (!empty($result_from_api) && is_array($result_from_api)) {
                 update_option('TAP_BOOKIES', $result_from_api);
-                set_transient($trasient_name, $now->format('Y-m-d H:i:s'), 4 * 3600);
+                set_transient($trasient_name, $result_from_api, 4 * 3600);
                 $this->unset_errors();
             }
         }
@@ -264,9 +267,8 @@ class RestClientTapPublic {
 	public function request_sports()
 	{
         $trasient_name = 'tap_deportes';
-
-        if(($result_from_api = get_transient($trasient_name)) === false) {
-
+        $result_from_api = get_transient($trasient_name);
+        if($result_from_api === false) {
             $url_sync_link_deportes = '%s/api/deporte/listado-visible-blogs.json/?access_token=%s&_=%s';
             $baseUrl = get_theme_mod('tap_base_url');
 
@@ -280,10 +282,9 @@ class RestClientTapPublic {
 
             $apiUrl = esc_url(sprintf($url_sync_link_deportes, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
             $result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Sports');
-            if (!is_null($result_from_api) && is_array($result_from_api) && in_array('deporte',
-                    $result_from_api) && !empty($result_from_api['deporte'])) {
+            if (!empty($result_from_api) && isset($result_from_api['deporte']) && count($result_from_api['deporte'])) {
                 update_option('TAP_DEPORTES', $result_from_api['deporte']);
-                set_transient($trasient_name, $now->format('Y-m-d H:i:s'), 4 * 3600);
+                set_transient($trasient_name, $result_from_api['deporte'], 4 * 3600);
                 $this->unset_errors();
             }
         }
@@ -296,8 +297,8 @@ class RestClientTapPublic {
 	public function request_competitions()
 	{
         $trasient_name = 'tap_competiciones';
-
-        if(($result_from_api = get_transient($trasient_name)) === false) {
+        $result_from_api = get_transient($trasient_name);
+        if($result_from_api === false) {
 
             $url_sync_link_competiciones = '%s/api/competicion/listado.json/?access_token=%s&_=%s';
             $baseUrl = get_theme_mod('tap_base_url');
@@ -312,9 +313,10 @@ class RestClientTapPublic {
 
             $apiUrl = esc_url(sprintf($url_sync_link_competiciones, $baseUrl, $oauthAccessToken, $now->getTimestamp()));
             $result_from_api = $this->get_result_from_api($apiUrl, true, 'Request Competitions');
-            if (isset($result_from_api['competicion']) && count($result_from_api['competicion'])) {
+            if (!empty($result_from_api) && isset($result_from_api['competicion'])
+                    && count($result_from_api['competicion'])) {
                 update_option('TAP_COMPETICIONES', $result_from_api['competicion']);
-                set_transient($trasient_name, $now->format('Y-m-d H:i:s'), 4 * 3600);
+                set_transient($trasient_name, $result_from_api['competicion'], 4 * 3600);
                 $this->unset_errors();
             }
         }
