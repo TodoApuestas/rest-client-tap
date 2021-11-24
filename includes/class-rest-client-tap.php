@@ -70,7 +70,7 @@ class RestClientTap {
 	public function __construct() {
 
 		$this->plugin_name = 'rest-client-tap';
-		$this->version = '1.1.7';
+		$this->version = '1.1.8';
 
 		$this->load_dependencies();
 		$this->set_locale();

@@ -4,7 +4,7 @@ Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=brazz
 Tags: api rest, tipster, pick
 Requires at least: 5.5
 Tested up to: 5.8.1
-Stable tag: 1.1.7
+Stable tag: 1.1.8
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,6 +51,10 @@ Nothing for now
 
 
 == Changelog ==
+
+= 1.1.8 =
+* Added several improvements
+* Fixed errors detected
 
 = 1.1.7 =
 * Tested up to Wordpress 5.8.1
